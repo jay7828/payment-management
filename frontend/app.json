@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Dukaan Ledger",
+    "slug": "dukaan-ledger",
+    "version": "1.0.0",
+    "icon": "./assets/icon.png",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EAF3FF"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EAF3FF"
+      },
+      "package": "com.jayesh78.dukaanledger"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e0a0432b-61ae-4a9e-a120-780dba10eba8"
+      }
+    }
+  }
+}
