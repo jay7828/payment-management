@@ -99,7 +99,7 @@ const serializeCustomerCard = (customer, bills, currentMonthKey) => {
   return {
     id: customer._id.toString(),
     name: customer.name,
-    mobile: customer.mobile,
+    mobile: customer.mobile || "",
     address: customer.address || "",
     otherInfo: customer.otherInfo || "",
     isActive: Boolean(customer.isActive),
@@ -167,26 +167,31 @@ const createCustomer = async (req, res, next) => {
     const name = String(req.body.name || "").trim();
     const mobile = String(req.body.mobile || "").trim();
 
-    if (!name || !mobile) {
-      return res.status(400).json({ message: "name and mobile are required" });
+    if (!name) {
+      return res.status(400).json({ message: "name is required" });
     }
 
-    const customer = await Customer.create({
+    const customerPayload = {
       name,
-      mobile,
       address: String(req.body.address || "").trim(),
       otherInfo: String(req.body.otherInfo || "").trim(),
       openingBalance: parseNonNegativeNumber(
         req.body.openingBalance !== undefined ? req.body.openingBalance : req.body.previousBalance,
         0
       )
-    });
+    };
+
+    if (mobile) {
+      customerPayload.mobile = mobile;
+    }
+
+    const customer = await Customer.create(customerPayload);
 
     return res.status(201).json({
       customer: {
         id: customer._id.toString(),
         name: customer.name,
-        mobile: customer.mobile,
+        mobile: customer.mobile || "",
         address: customer.address,
         otherInfo: customer.otherInfo,
         openingBalance: roundCurrency(customer.openingBalance),
@@ -226,7 +231,7 @@ const getCustomerDetails = async (req, res, next) => {
       customer: {
         id: customer._id.toString(),
         name: customer.name,
-        mobile: customer.mobile,
+        mobile: customer.mobile || "",
         address: customer.address || "",
         otherInfo: customer.otherInfo || "",
         isActive: Boolean(customer.isActive),
@@ -250,32 +255,46 @@ const getCustomerDetails = async (req, res, next) => {
 const updateCustomer = async (req, res, next) => {
   try {
     const { customerId } = req.params;
-    const updates = {};
+    const setUpdates = {};
+    const unsetUpdates = {};
 
     if (Object.prototype.hasOwnProperty.call(req.body, "name")) {
-      updates.name = String(req.body.name || "").trim();
+      setUpdates.name = String(req.body.name || "").trim();
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "mobile")) {
-      updates.mobile = String(req.body.mobile || "").trim();
+      const mobile = String(req.body.mobile || "").trim();
+      if (mobile) {
+        setUpdates.mobile = mobile;
+      } else {
+        unsetUpdates.mobile = "";
+      }
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "address")) {
-      updates.address = String(req.body.address || "").trim();
+      setUpdates.address = String(req.body.address || "").trim();
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "otherInfo")) {
-      updates.otherInfo = String(req.body.otherInfo || "").trim();
+      setUpdates.otherInfo = String(req.body.otherInfo || "").trim();
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "openingBalance")) {
-      updates.openingBalance = parseNonNegativeNumber(req.body.openingBalance, 0);
+      setUpdates.openingBalance = parseNonNegativeNumber(req.body.openingBalance, 0);
     }
     if (Object.prototype.hasOwnProperty.call(req.body, "isActive")) {
-      updates.isActive = Boolean(req.body.isActive);
+      setUpdates.isActive = Boolean(req.body.isActive);
     }
 
-    if (!Object.keys(updates).length) {
+    const updateQuery = {};
+    if (Object.keys(setUpdates).length) {
+      updateQuery.$set = setUpdates;
+    }
+    if (Object.keys(unsetUpdates).length) {
+      updateQuery.$unset = unsetUpdates;
+    }
+
+    if (!Object.keys(updateQuery).length) {
       return res.status(400).json({ message: "No valid fields provided" });
     }
 
-    const customer = await Customer.findByIdAndUpdate(customerId, updates, {
+    const customer = await Customer.findByIdAndUpdate(customerId, updateQuery, {
       new: true,
       runValidators: true
     }).lean();
@@ -291,7 +310,7 @@ const updateCustomer = async (req, res, next) => {
       customer: {
         id: customer._id.toString(),
         name: customer.name,
-        mobile: customer.mobile,
+        mobile: customer.mobile || "",
         address: customer.address || "",
         otherInfo: customer.otherInfo || "",
         isActive: Boolean(customer.isActive),

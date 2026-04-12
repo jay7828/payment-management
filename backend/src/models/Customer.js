@@ -11,10 +11,12 @@ const customerSchema = new mongoose.Schema(
     },
     mobile: {
       type: String,
-      required: true,
       trim: true,
-      minlength: 7,
-      maxlength: 20
+      maxlength: 20,
+      validate: {
+        validator: (value) => !value || value.length >= 7,
+        message: "mobile must be at least 7 characters"
+      }
     },
     address: {
       type: String,
@@ -46,6 +48,13 @@ const customerSchema = new mongoose.Schema(
   }
 );
 
-customerSchema.index({ mobile: 1 }, { unique: true });
+customerSchema.index(
+  { mobile: 1 },
+  {
+    name: "mobile_1",
+    unique: true,
+    sparse: true
+  }
+);
 
 module.exports = mongoose.model("Customer", customerSchema);
