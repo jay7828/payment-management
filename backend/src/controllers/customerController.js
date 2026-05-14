@@ -330,9 +330,35 @@ const updateCustomer = async (req, res, next) => {
   }
 };
 
+const deleteCustomer = async (req, res, next) => {
+  try {
+    const { customerId } = req.params;
+
+    const customer = await Customer.findById(customerId).select("_id").lean();
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    const [paymentsResult, billsResult] = await Promise.all([
+      Payment.deleteMany({ customerId }),
+      Bill.deleteMany({ customerId })
+    ]);
+    await Customer.deleteOne({ _id: customerId });
+
+    return res.json({
+      message: "Customer and all related bills and payments were deleted",
+      deletedPayments: paymentsResult.deletedCount || 0,
+      deletedBills: billsResult.deletedCount || 0
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   listCustomers,
   createCustomer,
   getCustomerDetails,
-  updateCustomer
+  updateCustomer,
+  deleteCustomer
 };
