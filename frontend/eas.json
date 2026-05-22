@@ -10,12 +10,21 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://backend-nine-lime-25.vercel.app/api"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://backend-nine-lime-25.vercel.app/api"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

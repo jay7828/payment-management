@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { api, getApiError } from "../api/client";
 import { colors, fontFamily, radius, spacing } from "../theme";
-import { MonthlyCollectionRow, SalesReport, Site } from "../types";
+import { MonthlyCollectionRow, SalesReport, Site, SiteReport } from "../types";
 import {
   DEFAULT_WHATSAPP_MESSAGE_TEMPLATE,
   WHATSAPP_TEMPLATE_PLACEHOLDERS,
@@ -43,7 +43,81 @@ interface SalesReportResponse {
   defaultRecipient: string;
 }
 
-const formatCurrency = (value: number) => `₹${value.toFixed(2)}`;
+const formatCurrency = (value: number) => `₹${value.toFixed(0)}`;
+
+const SalesReportPreview: React.FC<{ report: SalesReport }> = ({ report }) => (
+  <View style={reportStyles.wrap}>
+    <View style={reportStyles.summaryHero}>
+      <View style={reportStyles.heroStat}>
+        <Text style={reportStyles.heroLabel}>Collected</Text>
+        <Text style={[reportStyles.heroValue, { color: colors.success }]}>{formatCurrency(report.sales.totalCollection)}</Text>
+        <Text style={reportStyles.heroMeta}>{report.sales.transactionCount} payments</Text>
+      </View>
+      <View style={reportStyles.heroDivider} />
+      <View style={reportStyles.heroStat}>
+        <Text style={reportStyles.heroLabel}>Due</Text>
+        <Text style={[reportStyles.heroValue, { color: colors.warning }]}>{formatCurrency(report.customers.totalOutstandingDue)}</Text>
+        <Text style={reportStyles.heroMeta}>{report.customers.activeCustomers} customers</Text>
+      </View>
+    </View>
+
+    <View style={reportStyles.miniRow}>
+      <Text style={reportStyles.miniItem}>Billed {formatCurrency(report.billing.totalBilled)}</Text>
+      <Text style={reportStyles.miniItem}>Bill due {formatCurrency(report.billing.totalBillDue)}</Text>
+      <Text style={reportStyles.miniItem}>New +{report.customers.newCustomers}</Text>
+    </View>
+
+    <Text style={reportStyles.siteHeading}>By site</Text>
+    {(report.siteReports || []).map((site) => (
+      <SiteReportCard key={site.siteId || site.siteName} site={site} />
+    ))}
+  </View>
+);
+
+const SiteReportCard: React.FC<{ site: SiteReport }> = ({ site }) => (
+  <View style={reportStyles.siteCard}>
+    <View style={reportStyles.siteHead}>
+      <Text style={reportStyles.siteName}>{site.siteName}</Text>
+      <Text style={reportStyles.siteShare}>{site.collection.sharePercent}%</Text>
+    </View>
+    <View style={reportStyles.siteStats}>
+      <View style={reportStyles.siteStat}>
+        <Text style={reportStyles.siteStatLabel}>Collected</Text>
+        <Text style={[reportStyles.siteStatVal, { color: colors.success }]}>{formatCurrency(site.collection.total)}</Text>
+      </View>
+      <View style={reportStyles.siteStat}>
+        <Text style={reportStyles.siteStatLabel}>Txns</Text>
+        <Text style={reportStyles.siteStatVal}>{site.collection.transactionCount}</Text>
+      </View>
+      <View style={reportStyles.siteStat}>
+        <Text style={reportStyles.siteStatLabel}>Bill due</Text>
+        <Text style={[reportStyles.siteStatVal, { color: colors.danger }]}>{formatCurrency(site.billing.totalBillDue)}</Text>
+      </View>
+    </View>
+    {site.payments.length ? (
+      <View style={reportStyles.payList}>
+        {site.payments.slice(0, 8).map((p) => (
+          <View key={p.id} style={reportStyles.payRow}>
+            <View style={reportStyles.payLeft}>
+              <Text style={reportStyles.payName} numberOfLines={1}>
+                {p.customerName}
+              </Text>
+              <Text style={reportStyles.payMeta}>
+                {p.paymentDate ? dayjs(p.paymentDate).format("DD MMM") : "—"} · {p.mode}
+              </Text>
+            </View>
+            <Text style={reportStyles.payAmt}>{formatCurrency(p.amount)}</Text>
+          </View>
+        ))}
+        {site.payments.length > 8 ? (
+          <Text style={reportStyles.morePay}>+{site.payments.length - 8} more in email</Text>
+        ) : null}
+      </View>
+    ) : (
+      <Text style={reportStyles.noPay}>No payments this month</Text>
+    )}
+  </View>
+);
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLogout }) => {
   const [months, setMonths] = useState("6");
@@ -339,8 +413,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLo
 
           <Pressable style={styles.navCard} onPress={handleOpenSalesReportPage}>
             <View style={styles.navCardBody}>
-              <Text style={styles.navCardTitle}>Sales Report Email</Text>
-              <Text style={styles.navCardSubtitle}>Generate and email monthly sales reports.</Text>
+              <Text style={styles.navCardTitle}>Payment Report</Text>
+              <Text style={styles.navCardSubtitle}>Site-wise payments · email report</Text>
             </View>
             <Text style={styles.navCardArrow}>›</Text>
           </Pressable>
@@ -518,10 +592,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLo
             <Pressable style={styles.backButton} onPress={handleBackToHome}>
               <Text style={styles.backButtonText}>Back</Text>
             </Pressable>
-            <Text style={styles.pageTitle}>Monthly Sales Report</Text>
-            <Text style={styles.pageSubtitle}>
-              Preview monthly sales data and send the report by email.
-            </Text>
+            <Text style={styles.pageTitle}>Payment Report</Text>
+            <Text style={styles.pageSubtitle}>Site-wise payments · preview & email</Text>
           </View>
 
           <View style={styles.card}>
@@ -553,24 +625,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLo
             {salesError ? <Text style={styles.error}>{salesError}</Text> : null}
             {sendStatus ? <Text style={styles.templateStatus}>{sendStatus}</Text> : null}
 
-            {salesReport ? (
-              <View style={styles.detailCard}>
-                <Text style={styles.detailTitle}>{salesReport.monthLabel}</Text>
-                <Text style={styles.detailLine}>Collection: {formatCurrency(salesReport.sales.totalCollection)}</Text>
-                <Text style={styles.detailLine}>Transactions: {salesReport.sales.transactionCount}</Text>
-                <Text style={styles.detailLine}>Bills created: {salesReport.billing.billsCreated}</Text>
-                <Text style={styles.detailLine}>Total billed: {formatCurrency(salesReport.billing.totalBilled)}</Text>
-                <Text style={styles.detailLine}>Bill due: {formatCurrency(salesReport.billing.totalBillDue)}</Text>
-                <Text style={styles.detailLine}>New customers: {salesReport.customers.newCustomers}</Text>
-                <Text style={styles.detailLine}>
-                  Outstanding due: {formatCurrency(salesReport.customers.totalOutstandingDue)}
-                </Text>
-                <Text style={styles.detailLine}>
-                  Attendance marked: {salesReport.attendance.recordsMarked} (P {salesReport.attendance.present} / A{" "}
-                  {salesReport.attendance.absent})
-                </Text>
-              </View>
-            ) : null}
+            {salesReport ? <SalesReportPreview report={salesReport} /> : null}
 
             <Text style={styles.sectionLabel}>Send Report</Text>
             <TextInput
@@ -593,7 +648,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLo
               disabled={sendingReport || !emailConfigured}
             >
               <Text style={styles.primaryButtonText}>
-                {sendingReport ? "Sending..." : `Send ${dayjs(`${salesMonthKey}-01`).format("MMM YYYY")} Report`}
+                {sendingReport ? "Sending..." : `Email site-wise report · ${dayjs(`${salesMonthKey}-01`).format("MMM YY")}`}
               </Text>
             </Pressable>
           </View>
@@ -1083,5 +1138,97 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: 12,
     lineHeight: 17
+  }
+});
+
+const reportStyles = StyleSheet.create({
+  wrap: { gap: spacing.md, marginTop: spacing.sm },
+  summaryHero: {
+    flexDirection: "row",
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    alignItems: "center"
+  },
+  heroStat: { flex: 1, alignItems: "center" },
+  heroDivider: { width: 1, height: 48, backgroundColor: colors.border },
+  heroLabel: { fontFamily: fontFamily.medium, fontSize: 11, color: colors.textMuted, textTransform: "uppercase" },
+  heroValue: { fontFamily: fontFamily.bold, fontSize: 22, marginTop: 4 },
+  heroMeta: { fontFamily: fontFamily.medium, fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  miniRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  miniItem: {
+    fontFamily: fontFamily.medium,
+    fontSize: 12,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  siteHeading: {
+    fontFamily: fontFamily.bold,
+    fontSize: 15,
+    color: colors.textPrimary,
+    marginTop: spacing.xs
+  },
+  siteCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden"
+  },
+  siteHead: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.accentStrong,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  siteName: { fontFamily: fontFamily.bold, fontSize: 16, color: colors.textOnDark, flex: 1 },
+  siteShare: { fontFamily: fontFamily.bold, fontSize: 13, color: "#D9E8FF" },
+  siteStats: {
+    flexDirection: "row",
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
+  },
+  siteStat: { flex: 1 },
+  siteStatLabel: { fontFamily: fontFamily.medium, fontSize: 10, color: colors.textMuted, textTransform: "uppercase" },
+  siteStatVal: { fontFamily: fontFamily.bold, fontSize: 15, color: colors.textPrimary, marginTop: 2 },
+  payList: { padding: spacing.sm },
+  payRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    paddingHorizontal: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF3FA",
+    gap: spacing.sm
+  },
+  payLeft: { flex: 1 },
+  payName: { fontFamily: fontFamily.medium, fontSize: 13, color: colors.textPrimary },
+  payMeta: { fontFamily: fontFamily.medium, fontSize: 11, color: colors.textMuted },
+  payAmt: { fontFamily: fontFamily.bold, fontSize: 13, color: colors.success },
+  morePay: {
+    textAlign: "center",
+    fontFamily: fontFamily.medium,
+    fontSize: 11,
+    color: colors.textMuted,
+    paddingVertical: spacing.xs
+  },
+  noPay: {
+    padding: spacing.md,
+    fontFamily: fontFamily.medium,
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: "center"
   }
 });

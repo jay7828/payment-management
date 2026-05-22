@@ -96,6 +96,33 @@ export interface EmployeeAttendanceRow {
   summary: AttendanceSummary;
 }
 
+export interface SitePaymentRow {
+  id: string;
+  customerName: string;
+  amount: number;
+  mode: string;
+  paymentDate: string | null;
+}
+
+export interface SiteReport {
+  siteId: string | null;
+  siteName: string;
+  customerCount: number;
+  collection: {
+    total: number;
+    transactionCount: number;
+    paymentsByMode: Record<string, number>;
+    sharePercent: number;
+  };
+  billing: {
+    billsCreated: number;
+    totalBilled: number;
+    totalBillPaid: number;
+    totalBillDue: number;
+  };
+  payments: SitePaymentRow[];
+}
+
 export interface SalesReport {
   monthKey: string;
   monthLabel: string;
@@ -125,6 +152,7 @@ export interface SalesReport {
     halfDay: number;
     leave: number;
   };
+  siteReports: SiteReport[];
 }
 
 export interface CustomerCardData {
