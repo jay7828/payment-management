@@ -5,6 +5,7 @@ import {
   Alert,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +21,7 @@ import {
   loadWhatsAppTemplate,
   resolveWhatsAppTemplate
 } from "../utils/whatsappTemplate";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 
 interface CustomerDetailModalProps {
   visible: boolean;
@@ -32,6 +34,12 @@ const PAYMENT_MODES: Array<"CASH" | "UPI" | "BANK" | "OTHER"> = ["CASH", "UPI", 
 
 const billLabel = (bill: Bill) => `${bill.monthKey} • Due ₹${bill.dueAmount.toFixed(2)}`;
 
+type ConfirmDialog = {
+  title: string;
+  message: string;
+  onConfirm: () => void;
+};
+
 export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   visible,
   customerId,
@@ -43,6 +51,19 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [shareInfo, setShareInfo] = useState<string | null>(null);
   const [details, setDetails] = useState<CustomerDetailsResponse | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null);
+  const { isDesktop } = useBreakpoint();
+
+  const showConfirm = (dialog: ConfirmDialog) => {
+    if (Platform.OS === "web") {
+      setConfirmDialog(dialog);
+    } else {
+      Alert.alert(dialog.title, dialog.message, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: dialog.onConfirm }
+      ]);
+    }
+  };
 
   const [billMonthKey, setBillMonthKey] = useState(dayjs().format("YYYY-MM"));
   const [billAmount, setBillAmount] = useState("");
@@ -179,30 +200,23 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
       return;
     }
 
-    Alert.alert(
-      "Delete customer?",
-      `This permanently removes ${details.customer.name}, all of their bills, and all payment records. This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setSubmitting(true);
-              setError(null);
-              await api.delete(`/customers/${customerId}`);
-              onDataChange();
-              onClose();
-            } catch (requestError) {
-              setError(getApiError(requestError));
-            } finally {
-              setSubmitting(false);
-            }
-          }
+    showConfirm({
+      title: "Delete customer?",
+      message: `This permanently removes ${details.customer.name}, all of their bills, and all payment records. This cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          setSubmitting(true);
+          setError(null);
+          await api.delete(`/customers/${customerId}`);
+          onDataChange();
+          onClose();
+        } catch (requestError) {
+          setError(getApiError(requestError));
+        } finally {
+          setSubmitting(false);
         }
-      ]
-    );
+      }
+    });
   };
 
   const beginEditBill = (bill: Bill) => {
@@ -274,33 +288,26 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
       return;
     }
 
-    Alert.alert(
-      "Remove bill?",
-      `This deletes the ${bill.monthKey} bill and every payment line tied to it. Balances are updated automatically.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setSubmitting(true);
-              setError(null);
-              await api.delete(`/customers/${customerId}/bills/${bill.id}`);
-              if (editingBillId === bill.id) {
-                setEditingBillId(null);
-              }
-              await loadDetails();
-              onDataChange();
-            } catch (requestError) {
-              setError(getApiError(requestError));
-            } finally {
-              setSubmitting(false);
-            }
+    showConfirm({
+      title: "Remove bill?",
+      message: `This deletes the ${bill.monthKey} bill and every payment line tied to it. Balances are updated automatically.`,
+      onConfirm: async () => {
+        try {
+          setSubmitting(true);
+          setError(null);
+          await api.delete(`/customers/${customerId}/bills/${bill.id}`);
+          if (editingBillId === bill.id) {
+            setEditingBillId(null);
           }
+          await loadDetails();
+          onDataChange();
+        } catch (requestError) {
+          setError(getApiError(requestError));
+        } finally {
+          setSubmitting(false);
         }
-      ]
-    );
+      }
+    });
   };
 
   const beginEditPayment = (payment: Payment) => {
@@ -359,33 +366,26 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
       return;
     }
 
-    Alert.alert(
-      "Remove payment?",
-      "This reverses how this payment was applied to the bill and any extra credit. Balances are updated automatically.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setSubmitting(true);
-              setError(null);
-              await api.delete(`/customers/${customerId}/payments/${payment.id}`);
-              if (editingPaymentId === payment.id) {
-                setEditingPaymentId(null);
-              }
-              await loadDetails();
-              onDataChange();
-            } catch (requestError) {
-              setError(getApiError(requestError));
-            } finally {
-              setSubmitting(false);
-            }
+    showConfirm({
+      title: "Remove payment?",
+      message: "This reverses how this payment was applied to the bill and any extra credit. Balances are updated automatically.",
+      onConfirm: async () => {
+        try {
+          setSubmitting(true);
+          setError(null);
+          await api.delete(`/customers/${customerId}/payments/${payment.id}`);
+          if (editingPaymentId === payment.id) {
+            setEditingPaymentId(null);
           }
+          await loadDetails();
+          onDataChange();
+        } catch (requestError) {
+          setError(getApiError(requestError));
+        } finally {
+          setSubmitting(false);
         }
-      ]
-    );
+      }
+    });
   };
 
   const handleRecordPayment = async () => {
@@ -490,11 +490,11 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.panel}>
+    <Modal visible={visible} animationType={isDesktop ? "fade" : "slide"} transparent>
+      <View style={[styles.overlay, isDesktop ? styles.overlayDesktop : null]}>
+        <View style={[styles.panel, isDesktop ? styles.panelDesktop : null]}>
           <View style={styles.header}>
-            <View>
+            <View style={styles.headerLeft}>
               <Text style={styles.title}>{details?.customer.name || "Customer"}</Text>
               <Text style={styles.subtitle}>{details?.customer.mobile || ""}</Text>
             </View>
@@ -516,7 +516,8 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {shareInfo ? <Text style={styles.info}>{shareInfo}</Text> : null}
 
-          <ScrollView contentContainerStyle={styles.content}>
+          <ScrollView contentContainerStyle={[styles.content, isDesktop ? styles.contentDesktop : null]}>
+            {/* Summary card */}
             {details ? (
               <View style={styles.summaryCard}>
                 <View>
@@ -526,12 +527,7 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 <View style={styles.summaryRight}>
                   <Text style={styles.summarySmall}>Previous: ₹{details.customer.previousBalance.toFixed(2)}</Text>
                   <Text style={styles.summarySmall}>Credit: ₹{details.customer.creditBalance.toFixed(2)}</Text>
-                  <Text
-                    style={[
-                      styles.summarySmall,
-                      details.customer.unpaidBillsCount > 3 ? styles.summaryAlert : null
-                    ]}
-                  >
+                  <Text style={[styles.summarySmall, details.customer.unpaidBillsCount > 3 ? styles.summaryAlert : null]}>
                     Unpaid Bills: {details.customer.unpaidBillsCount}
                   </Text>
                   <Text style={styles.summarySmall}>Bills Unpaid ₹{details.customer.totalUnpaidBillAmount.toFixed(2)}</Text>
@@ -539,276 +535,308 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
               </View>
             ) : null}
 
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Create Monthly Bill</Text>
-              <TextInput
-                value={billMonthKey}
-                onChangeText={setBillMonthKey}
-                placeholder="YYYY-MM"
-                placeholderTextColor="#8094AF"
-                style={styles.input}
-              />
-              <TextInput
-                value={billAmount}
-                onChangeText={setBillAmount}
-                keyboardType="decimal-pad"
-                placeholder="Bill amount"
-                placeholderTextColor="#8094AF"
-                style={styles.input}
-              />
-              <TextInput
-                value={billNotes}
-                onChangeText={setBillNotes}
-                placeholder="Notes (optional)"
-                placeholderTextColor="#8094AF"
-                style={styles.input}
-              />
-              <Pressable style={[styles.actionButton, submitting ? styles.disabled : null]} onPress={handleCreateBill}>
-                <Text style={styles.actionButtonText}>Add Bill</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Record Payment</Text>
-              <TextInput
-                value={paymentAmount}
-                onChangeText={setPaymentAmount}
-                keyboardType="decimal-pad"
-                placeholder="Payment amount"
-                placeholderTextColor="#8094AF"
-                style={styles.input}
-              />
-
-              <Text style={styles.fieldLabel}>Payment Mode</Text>
-              <View style={styles.modeRow}>
-                {PAYMENT_MODES.map((mode) => (
-                  <Pressable
-                    key={mode}
-                    style={[styles.modeChip, paymentMode === mode ? styles.modeChipActive : null]}
-                    onPress={() => setPaymentMode(mode)}
-                  >
-                    <Text style={[styles.modeChipText, paymentMode === mode ? styles.modeChipTextActive : null]}>{mode}</Text>
+            {/* Desktop: two-column split; Mobile: stacked */}
+            <View style={isDesktop ? styles.twoColDesktop : null}>
+              {/* Left column: forms */}
+              <View style={isDesktop ? styles.colLeft : null}>
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionTitle}>Create Monthly Bill</Text>
+                  <TextInput
+                    value={billMonthKey}
+                    onChangeText={setBillMonthKey}
+                    placeholder="YYYY-MM"
+                    placeholderTextColor="#8094AF"
+                    style={styles.input}
+                  />
+                  <TextInput
+                    value={billAmount}
+                    onChangeText={setBillAmount}
+                    keyboardType="decimal-pad"
+                    placeholder="Bill amount"
+                    placeholderTextColor="#8094AF"
+                    style={styles.input}
+                  />
+                  <TextInput
+                    value={billNotes}
+                    onChangeText={setBillNotes}
+                    placeholder="Notes (optional)"
+                    placeholderTextColor="#8094AF"
+                    style={styles.input}
+                  />
+                  <Pressable style={[styles.actionButton, submitting ? styles.disabled : null]} onPress={handleCreateBill}>
+                    <Text style={styles.actionButtonText}>Add Bill</Text>
                   </Pressable>
-                ))}
-              </View>
+                </View>
 
-              <Text style={styles.fieldLabel}>Apply To Bill</Text>
-              <View style={styles.billChipWrap}>
-                {unpaidBills.length ? (
-                  unpaidBills.map((bill) => (
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionTitle}>Record Payment</Text>
+                  <TextInput
+                    value={paymentAmount}
+                    onChangeText={setPaymentAmount}
+                    keyboardType="decimal-pad"
+                    placeholder="Payment amount"
+                    placeholderTextColor="#8094AF"
+                    style={styles.input}
+                  />
+
+                  <Text style={styles.fieldLabel}>Payment Mode</Text>
+                  <View style={styles.modeRow}>
+                    {PAYMENT_MODES.map((mode) => (
+                      <Pressable
+                        key={mode}
+                        style={[styles.modeChip, paymentMode === mode ? styles.modeChipActive : null]}
+                        onPress={() => setPaymentMode(mode)}
+                      >
+                        <Text style={[styles.modeChipText, paymentMode === mode ? styles.modeChipTextActive : null]}>{mode}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Apply To Bill</Text>
+                  <View style={styles.billChipWrap}>
+                    {unpaidBills.length ? (
+                      unpaidBills.map((bill) => (
+                        <Pressable
+                          key={bill.id}
+                          style={[styles.billChip, selectedBillId === bill.id ? styles.billChipActive : null]}
+                          onPress={() => setSelectedBillId(bill.id)}
+                        >
+                          <Text style={[styles.billChipText, selectedBillId === bill.id ? styles.billChipTextActive : null]}>
+                            {billLabel(bill)}
+                          </Text>
+                        </Pressable>
+                      ))
+                    ) : (
+                      <Text style={styles.helpText}>No unpaid bill. Payment will be saved as advance credit.</Text>
+                    )}
+                  </View>
+
+                  <TextInput
+                    value={paymentNotes}
+                    onChangeText={setPaymentNotes}
+                    placeholder="Notes (optional)"
+                    placeholderTextColor="#8094AF"
+                    style={styles.input}
+                  />
+
+                  <Pressable style={[styles.actionButton, submitting ? styles.disabled : null]} onPress={handleRecordPayment}>
+                    <Text style={styles.actionButtonText}>Add Payment</Text>
+                  </Pressable>
+                </View>
+
+                {details ? (
+                  <View style={styles.sectionCard}>
+                    <Text style={styles.sectionTitle}>Remove customer</Text>
+                    <Text style={styles.helpText}>
+                      Deletes this customer and every bill and payment linked to them. Use this when you no longer need the account.
+                    </Text>
                     <Pressable
-                      key={bill.id}
-                      style={[styles.billChip, selectedBillId === bill.id ? styles.billChipActive : null]}
-                      onPress={() => setSelectedBillId(bill.id)}
+                      style={[styles.dangerButton, submitting ? styles.disabled : null]}
+                      onPress={handleDeleteCustomer}
+                      disabled={submitting}
                     >
-                      <Text style={[styles.billChipText, selectedBillId === bill.id ? styles.billChipTextActive : null]}>
-                        {billLabel(bill)}
-                      </Text>
+                      <Text style={styles.dangerButtonText}>{submitting ? "Working…" : "Delete customer"}</Text>
                     </Pressable>
-                  ))
-                ) : (
-                  <Text style={styles.helpText}>No unpaid bill. Payment will be saved as advance credit.</Text>
-                )}
+                  </View>
+                ) : null}
               </View>
 
-              <TextInput
-                value={paymentNotes}
-                onChangeText={setPaymentNotes}
-                placeholder="Notes (optional)"
-                placeholderTextColor="#8094AF"
-                style={styles.input}
-              />
-
-              <Pressable style={[styles.actionButton, submitting ? styles.disabled : null]} onPress={handleRecordPayment}>
-                <Text style={styles.actionButtonText}>Add Payment</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Bills</Text>
-              {details?.bills.map((bill) => (
-                <View style={styles.historyBlock} key={bill.id}>
-                  <View style={styles.historyRow}>
-                    <View style={styles.historyRowLeft}>
-                      <Text style={styles.historyTitle}>{bill.monthKey}</Text>
-                      <Text style={styles.historyMeta}>
-                        Billed {bill.billedDate ? dayjs(bill.billedDate).format("DD MMM YYYY") : "-"}
-                      </Text>
-                    </View>
-                    <View style={styles.historyRowRight}>
-                      <Text style={styles.historyAmount}>₹{bill.amount.toFixed(2)}</Text>
-                      <Text style={[styles.historyMeta, bill.dueAmount > 0 ? styles.dueText : styles.paidText]}>
-                        {bill.status} • Due ₹{bill.dueAmount.toFixed(2)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {editingBillId === bill.id ? (
-                    <View style={styles.editBlock}>
-                      <TextInput
-                        value={editBillMonthKey}
-                        onChangeText={setEditBillMonthKey}
-                        placeholder="YYYY-MM"
-                        placeholderTextColor="#8094AF"
-                        style={styles.input}
-                      />
-                      <TextInput
-                        value={editBillAmount}
-                        onChangeText={setEditBillAmount}
-                        keyboardType="decimal-pad"
-                        placeholder="Bill amount"
-                        placeholderTextColor="#8094AF"
-                        style={styles.input}
-                      />
-                      <TextInput
-                        value={editBillNotes}
-                        onChangeText={setEditBillNotes}
-                        placeholder="Notes"
-                        placeholderTextColor="#8094AF"
-                        style={styles.input}
-                      />
-                      <TextInput
-                        value={editBillBilledDate}
-                        onChangeText={setEditBillBilledDate}
-                        placeholder="Billed date YYYY-MM-DD (optional)"
-                        placeholderTextColor="#8094AF"
-                        style={styles.input}
-                      />
-                      <View style={styles.editActions}>
-                        <Pressable
-                          style={[styles.outlineButton, submitting ? styles.disabled : null]}
-                          onPress={cancelEditBill}
-                          disabled={submitting}
-                        >
-                          <Text style={styles.outlineButtonText}>Cancel</Text>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.actionButton, styles.editSaveButton, submitting ? styles.disabled : null]}
-                          onPress={handleSaveBillEdit}
-                          disabled={submitting}
-                        >
-                          <Text style={styles.actionButtonText}>Save bill</Text>
-                        </Pressable>
+              {/* Right column: bills & payments history */}
+              <View style={isDesktop ? styles.colRight : null}>
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionTitle}>Bills</Text>
+                  {details?.bills.map((bill) => (
+                    <View style={styles.historyBlock} key={bill.id}>
+                      <View style={styles.historyRow}>
+                        <View style={styles.historyRowLeft}>
+                          <Text style={styles.historyTitle}>{bill.monthKey}</Text>
+                          <Text style={styles.historyMeta}>
+                            Billed {bill.billedDate ? dayjs(bill.billedDate).format("DD MMM YYYY") : "-"}
+                          </Text>
+                        </View>
+                        <View style={styles.historyRowRight}>
+                          <Text style={styles.historyAmount}>₹{bill.amount.toFixed(2)}</Text>
+                          <Text style={[styles.historyMeta, bill.dueAmount > 0 ? styles.dueText : styles.paidText]}>
+                            {bill.status} • Due ₹{bill.dueAmount.toFixed(2)}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  ) : (
-                    <View style={styles.rowActions}>
-                      <Pressable onPress={() => beginEditBill(bill)} hitSlop={8}>
-                        <Text style={styles.rowActionText}>Edit</Text>
-                      </Pressable>
-                      <Pressable onPress={() => confirmDeleteBill(bill)} hitSlop={8}>
-                        <Text style={[styles.rowActionText, styles.rowActionDanger]}>Remove</Text>
-                      </Pressable>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
 
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Recent Payments</Text>
-              {details?.payments.map((payment) => (
-                <View style={styles.historyBlock} key={payment.id}>
-                  <View style={styles.historyRow}>
-                    <View style={styles.historyRowLeft}>
-                      <Text style={styles.historyTitle}>₹{payment.amount.toFixed(2)}</Text>
-                      <Text style={styles.historyMeta}>{payment.mode}</Text>
-                    </View>
-                    <View style={styles.historyRowRight}>
-                      <Text style={styles.historyMeta}>
-                        {payment.paymentDate ? dayjs(payment.paymentDate).format("DD MMM YYYY") : "-"}
-                      </Text>
-                      <Text style={styles.historyMeta}>Credit ₹{payment.extraCredit.toFixed(2)}</Text>
-                    </View>
-                  </View>
-
-                  {editingPaymentId === payment.id ? (
-                    <View style={styles.editBlock}>
-                      <TextInput
-                        value={editPaymentAmount}
-                        onChangeText={setEditPaymentAmount}
-                        keyboardType="decimal-pad"
-                        placeholder="Amount"
-                        placeholderTextColor="#8094AF"
-                        style={styles.input}
-                      />
-                      <Text style={styles.fieldLabel}>Mode</Text>
-                      <View style={styles.modeRow}>
-                        {PAYMENT_MODES.map((mode) => (
-                          <Pressable
-                            key={mode}
-                            style={[styles.modeChip, editPaymentMode === mode ? styles.modeChipActive : null]}
-                            onPress={() => setEditPaymentMode(mode)}
-                          >
-                            <Text style={[styles.modeChipText, editPaymentMode === mode ? styles.modeChipTextActive : null]}>
-                              {mode}
-                            </Text>
+                      {editingBillId === bill.id ? (
+                        <View style={styles.editBlock}>
+                          <TextInput
+                            value={editBillMonthKey}
+                            onChangeText={setEditBillMonthKey}
+                            placeholder="YYYY-MM"
+                            placeholderTextColor="#8094AF"
+                            style={styles.input}
+                          />
+                          <TextInput
+                            value={editBillAmount}
+                            onChangeText={setEditBillAmount}
+                            keyboardType="decimal-pad"
+                            placeholder="Bill amount"
+                            placeholderTextColor="#8094AF"
+                            style={styles.input}
+                          />
+                          <TextInput
+                            value={editBillNotes}
+                            onChangeText={setEditBillNotes}
+                            placeholder="Notes"
+                            placeholderTextColor="#8094AF"
+                            style={styles.input}
+                          />
+                          <TextInput
+                            value={editBillBilledDate}
+                            onChangeText={setEditBillBilledDate}
+                            placeholder="Billed date YYYY-MM-DD (optional)"
+                            placeholderTextColor="#8094AF"
+                            style={styles.input}
+                          />
+                          <View style={styles.editActions}>
+                            <Pressable
+                              style={[styles.outlineButton, submitting ? styles.disabled : null]}
+                              onPress={cancelEditBill}
+                              disabled={submitting}
+                            >
+                              <Text style={styles.outlineButtonText}>Cancel</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.actionButton, styles.editSaveButton, submitting ? styles.disabled : null]}
+                              onPress={handleSaveBillEdit}
+                              disabled={submitting}
+                            >
+                              <Text style={styles.actionButtonText}>Save bill</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.rowActions}>
+                          <Pressable onPress={() => beginEditBill(bill)} hitSlop={8}>
+                            <Text style={styles.rowActionText}>Edit</Text>
                           </Pressable>
-                        ))}
-                      </View>
-                      <TextInput
-                        value={editPaymentDate}
-                        onChangeText={setEditPaymentDate}
-                        placeholder="YYYY-MM-DD"
-                        placeholderTextColor="#8094AF"
-                        style={styles.input}
-                      />
-                      <TextInput
-                        value={editPaymentNotes}
-                        onChangeText={setEditPaymentNotes}
-                        placeholder="Notes"
-                        placeholderTextColor="#8094AF"
-                        style={styles.input}
-                      />
-                      <View style={styles.editActions}>
-                        <Pressable
-                          style={[styles.outlineButton, submitting ? styles.disabled : null]}
-                          onPress={cancelEditPayment}
-                          disabled={submitting}
-                        >
-                          <Text style={styles.outlineButtonText}>Cancel</Text>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.actionButton, styles.editSaveButton, submitting ? styles.disabled : null]}
-                          onPress={handleSavePaymentEdit}
-                          disabled={submitting}
-                        >
-                          <Text style={styles.actionButtonText}>Save payment</Text>
-                        </Pressable>
-                      </View>
+                          <Pressable onPress={() => confirmDeleteBill(bill)} hitSlop={8}>
+                            <Text style={[styles.rowActionText, styles.rowActionDanger]}>Remove</Text>
+                          </Pressable>
+                        </View>
+                      )}
                     </View>
-                  ) : (
-                    <View style={styles.rowActions}>
-                      <Pressable onPress={() => beginEditPayment(payment)} hitSlop={8}>
-                        <Text style={styles.rowActionText}>Edit</Text>
-                      </Pressable>
-                      <Pressable onPress={() => confirmDeletePayment(payment)} hitSlop={8}>
-                        <Text style={[styles.rowActionText, styles.rowActionDanger]}>Remove</Text>
-                      </Pressable>
-                    </View>
-                  )}
+                  ))}
                 </View>
-              ))}
-            </View>
 
-            {details ? (
-              <View style={styles.sectionCard}>
-                <Text style={styles.sectionTitle}>Remove customer</Text>
-                <Text style={styles.helpText}>
-                  Deletes this customer and every bill and payment linked to them. Use this when you no longer need the
-                  account.
-                </Text>
-                <Pressable
-                  style={[styles.dangerButton, submitting ? styles.disabled : null]}
-                  onPress={handleDeleteCustomer}
-                  disabled={submitting}
-                >
-                  <Text style={styles.dangerButtonText}>{submitting ? "Working…" : "Delete customer"}</Text>
-                </Pressable>
+                <View style={styles.sectionCard}>
+                  <Text style={styles.sectionTitle}>Recent Payments</Text>
+                  {details?.payments.map((payment) => (
+                    <View style={styles.historyBlock} key={payment.id}>
+                      <View style={styles.historyRow}>
+                        <View style={styles.historyRowLeft}>
+                          <Text style={styles.historyTitle}>₹{payment.amount.toFixed(2)}</Text>
+                          <Text style={styles.historyMeta}>{payment.mode}</Text>
+                        </View>
+                        <View style={styles.historyRowRight}>
+                          <Text style={styles.historyMeta}>
+                            {payment.paymentDate ? dayjs(payment.paymentDate).format("DD MMM YYYY") : "-"}
+                          </Text>
+                          <Text style={styles.historyMeta}>Credit ₹{payment.extraCredit.toFixed(2)}</Text>
+                        </View>
+                      </View>
+
+                      {editingPaymentId === payment.id ? (
+                        <View style={styles.editBlock}>
+                          <TextInput
+                            value={editPaymentAmount}
+                            onChangeText={setEditPaymentAmount}
+                            keyboardType="decimal-pad"
+                            placeholder="Amount"
+                            placeholderTextColor="#8094AF"
+                            style={styles.input}
+                          />
+                          <Text style={styles.fieldLabel}>Mode</Text>
+                          <View style={styles.modeRow}>
+                            {PAYMENT_MODES.map((mode) => (
+                              <Pressable
+                                key={mode}
+                                style={[styles.modeChip, editPaymentMode === mode ? styles.modeChipActive : null]}
+                                onPress={() => setEditPaymentMode(mode)}
+                              >
+                                <Text style={[styles.modeChipText, editPaymentMode === mode ? styles.modeChipTextActive : null]}>
+                                  {mode}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                          <TextInput
+                            value={editPaymentDate}
+                            onChangeText={setEditPaymentDate}
+                            placeholder="YYYY-MM-DD"
+                            placeholderTextColor="#8094AF"
+                            style={styles.input}
+                          />
+                          <TextInput
+                            value={editPaymentNotes}
+                            onChangeText={setEditPaymentNotes}
+                            placeholder="Notes"
+                            placeholderTextColor="#8094AF"
+                            style={styles.input}
+                          />
+                          <View style={styles.editActions}>
+                            <Pressable
+                              style={[styles.outlineButton, submitting ? styles.disabled : null]}
+                              onPress={cancelEditPayment}
+                              disabled={submitting}
+                            >
+                              <Text style={styles.outlineButtonText}>Cancel</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.actionButton, styles.editSaveButton, submitting ? styles.disabled : null]}
+                              onPress={handleSavePaymentEdit}
+                              disabled={submitting}
+                            >
+                              <Text style={styles.actionButtonText}>Save payment</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.rowActions}>
+                          <Pressable onPress={() => beginEditPayment(payment)} hitSlop={8}>
+                            <Text style={styles.rowActionText}>Edit</Text>
+                          </Pressable>
+                          <Pressable onPress={() => confirmDeletePayment(payment)} hitSlop={8}>
+                            <Text style={[styles.rowActionText, styles.rowActionDanger]}>Remove</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
               </View>
-            ) : null}
+            </View>
           </ScrollView>
         </View>
+
+        {/* Web-safe confirm dialog */}
+        {confirmDialog ? (
+          <View style={styles.confirmOverlay}>
+            <View style={styles.confirmCard}>
+              <Text style={styles.confirmTitle}>{confirmDialog.title}</Text>
+              <Text style={styles.confirmMessage}>{confirmDialog.message}</Text>
+              <View style={styles.confirmActions}>
+                <Pressable style={styles.confirmCancel} onPress={() => setConfirmDialog(null)}>
+                  <Text style={styles.confirmCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.confirmDelete}
+                  onPress={() => {
+                    setConfirmDialog(null);
+                    confirmDialog.onConfirm();
+                  }}
+                >
+                  <Text style={styles.confirmDeleteText}>Confirm</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
       </View>
     </Modal>
   );
@@ -820,6 +848,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(7,17,31,0.65)",
     justifyContent: "flex-end"
   },
+  overlayDesktop: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl
+  },
   panel: {
     height: "92%",
     backgroundColor: colors.cardSoft,
@@ -827,16 +860,34 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     paddingTop: spacing.lg
   },
+  panelDesktop: {
+    height: "auto",
+    maxHeight: "90%",
+    width: "100%",
+    maxWidth: 960,
+    borderRadius: radius.xl,
+    paddingTop: spacing.lg,
+    shadowColor: "#07111F",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 30,
+    elevation: 10
+  },
   header: {
     paddingHorizontal: spacing.lg,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center"
   },
+  headerLeft: {
+    flex: 1,
+    marginRight: spacing.md
+  },
   headerActions: {
     flexDirection: "row",
     gap: spacing.sm,
-    alignItems: "center"
+    alignItems: "center",
+    flexShrink: 0
   },
   title: {
     color: colors.textPrimary,
@@ -887,6 +938,23 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.md,
     paddingBottom: spacing.xl * 2
+  },
+  contentDesktop: {
+    padding: spacing.xl,
+    paddingBottom: spacing.xl
+  },
+  twoColDesktop: {
+    flexDirection: "row",
+    gap: spacing.lg,
+    alignItems: "flex-start"
+  },
+  colLeft: {
+    flex: 1,
+    gap: spacing.md
+  },
+  colRight: {
+    flex: 1,
+    gap: spacing.md
   },
   summaryCard: {
     backgroundColor: colors.surfaceMuted,
@@ -1126,5 +1194,73 @@ const styles = StyleSheet.create({
     color: colors.textOnDark,
     fontFamily: fontFamily.bold,
     fontSize: 14
+  },
+  confirmOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(7,17,31,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl
+  },
+  confirmCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    maxWidth: 420,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.md,
+    shadowColor: "#07111F",
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 20,
+    elevation: 8
+  },
+  confirmTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.bold,
+    fontSize: 18
+  },
+  confirmMessage: {
+    color: colors.textMuted,
+    fontFamily: fontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  confirmActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+    marginTop: spacing.xs
+  },
+  confirmCancel: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: "#FFFFFF"
+  },
+  confirmCancelText: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.medium,
+    fontSize: 14
+  },
+  confirmDelete: {
+    backgroundColor: colors.danger,
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.lg
+  },
+  confirmDeleteText: {
+    color: colors.textOnDark,
+    fontFamily: fontFamily.bold,
+    fontSize: 14
   }
 });
+

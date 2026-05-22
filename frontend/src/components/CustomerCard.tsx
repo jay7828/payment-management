@@ -79,7 +79,11 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: spacing.sm
+    gap: spacing.sm,
+    flexBasis: "auto",
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 280
   },
   headerRow: {
     flexDirection: "row",

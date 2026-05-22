@@ -33,7 +33,10 @@ export const radius = {
 };
 
 export const fontFamily = {
-  regular: Platform.select({ ios: "Avenir Next", android: "sans-serif", default: "System" }),
-  medium: Platform.select({ ios: "Avenir Next Demi Bold", android: "sans-serif-medium", default: "System" }),
-  bold: Platform.select({ ios: "Avenir Next Bold", android: "sans-serif-medium", default: "System" })
+  regular: Platform.select({ ios: "Avenir Next", android: "sans-serif", default: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }),
+  medium: Platform.select({ ios: "Avenir Next Demi Bold", android: "sans-serif-medium", default: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }),
+  bold: Platform.select({ ios: "Avenir Next Bold", android: "sans-serif-medium", default: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" })
 };
+
+export const DESKTOP_BREAKPOINT = 768;
+export const MAX_CONTENT_WIDTH = 1280;

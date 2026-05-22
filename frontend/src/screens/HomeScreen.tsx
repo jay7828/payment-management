@@ -5,6 +5,7 @@ import { api, getApiError } from "../api/client";
 import { MetricCard } from "../components/MetricCard";
 import { colors, fontFamily, radius, spacing } from "../theme";
 import { HomeSummary } from "../types";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 
 interface HomeScreenProps {
   refreshKey: number;
@@ -15,6 +16,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ refreshKey, onOpenCustom
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<HomeSummary | null>(null);
+  const { isDesktop } = useBreakpoint();
 
   const loadSummary = async () => {
     try {
@@ -34,26 +36,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ refreshKey, onOpenCustom
   }, [refreshKey]);
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.heroCard}>
-        <Text style={styles.heroLabel}>Total Due Payment</Text>
-        <Text style={styles.heroValue}>₹{(summary?.totalDue || 0).toFixed(2)}</Text>
-        <Text style={styles.heroSubtext}>Live balance across all active customers</Text>
-      </View>
+    <ScrollView contentContainerStyle={[styles.content, isDesktop ? styles.contentDesktop : null]}>
+      {/* Hero + metrics row on desktop */}
+      {isDesktop ? (
+        <View style={styles.topRowDesktop}>
+          <View style={[styles.heroCard, styles.heroCardDesktop]}>
+            <Text style={styles.heroLabel}>Total Due Payment</Text>
+            <Text style={styles.heroValue}>₹{(summary?.totalDue || 0).toFixed(2)}</Text>
+            <Text style={styles.heroSubtext}>Live balance across all active customers</Text>
+          </View>
+          <View style={styles.metricsColDesktop}>
+            <MetricCard label="Active Customers" value={String(summary?.totalCustomers || 0)} />
+            <MetricCard label="Customers With Due" value={String(summary?.customersWithDue || 0)} accentColor={colors.danger} />
+            <MetricCard
+              label="This Month Collection"
+              value={`₹${(summary?.currentMonthCollection || 0).toFixed(2)}`}
+              accentColor={colors.success}
+            />
+          </View>
+        </View>
+      ) : (
+        <>
+          <View style={styles.heroCard}>
+            <Text style={styles.heroLabel}>Total Due Payment</Text>
+            <Text style={styles.heroValue}>₹{(summary?.totalDue || 0).toFixed(2)}</Text>
+            <Text style={styles.heroSubtext}>Live balance across all active customers</Text>
+          </View>
+          <View style={styles.metricGrid}>
+            <MetricCard label="Active Customers" value={String(summary?.totalCustomers || 0)} />
+            <MetricCard label="Customers With Due" value={String(summary?.customersWithDue || 0)} accentColor={colors.danger} />
+            <MetricCard
+              label="This Month Collection"
+              value={`₹${(summary?.currentMonthCollection || 0).toFixed(2)}`}
+              accentColor={colors.success}
+            />
+          </View>
+        </>
+      )}
 
       {loading ? <ActivityIndicator color={colors.accentStrong} style={{ marginTop: 30 }} /> : null}
-
       {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <View style={styles.metricGrid}>
-        <MetricCard label="Active Customers" value={String(summary?.totalCustomers || 0)} />
-        <MetricCard label="Customers With Due" value={String(summary?.customersWithDue || 0)} accentColor={colors.danger} />
-        <MetricCard
-          label="This Month Collection"
-          value={`₹${(summary?.currentMonthCollection || 0).toFixed(2)}`}
-          accentColor={colors.success}
-        />
-      </View>
 
       <Text style={styles.sectionTitle}>Due Customers</Text>
 
@@ -63,33 +85,39 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ refreshKey, onOpenCustom
         </View>
       ) : null}
 
-      {summary?.dueCustomers.map((customer) => {
-        const statusDate = customer.statusDate ? dayjs(customer.statusDate).format("DD MMM YYYY") : "-";
-        const dueAmountColor =
-          customer.totalDue <= 0
-            ? colors.success
-            : customer.unpaidBillsCount > 1 && customer.unpaidBillsCount < 3
-              ? colors.warning
-              : colors.danger;
+      <View style={[styles.dueList, isDesktop ? styles.dueListDesktop : null]}>
+        {summary?.dueCustomers.map((customer) => {
+          const statusDate = customer.statusDate ? dayjs(customer.statusDate).format("DD MMM YYYY") : "-";
+          const dueAmountColor =
+            customer.totalDue <= 0
+              ? colors.success
+              : customer.unpaidBillsCount > 1 && customer.unpaidBillsCount < 3
+                ? colors.warning
+                : colors.danger;
 
-        return (
-          <Pressable key={customer.id} style={styles.dueCard} onPress={() => onOpenCustomer(customer.id)}>
-            <View>
-              <Text style={styles.dueName}>{customer.name}</Text>
-              <Text style={styles.dueMobile}>{customer.mobile}</Text>
-            </View>
-            <View style={styles.dueRight}>
-              <Text style={[styles.dueAmount, { color: dueAmountColor }]}>₹{customer.totalDue.toFixed(2)}</Text>
-              <Text style={styles.dueMeta}>
-                {customer.currentMonthStatus} • {statusDate}
-              </Text>
-              <Text style={[styles.unpaidMeta, customer.unpaidBillsCount > 3 ? styles.unpaidMetaAlert : null]}>
-                Unpaid Bills: {customer.unpaidBillsCount} • Bills ₹{customer.totalUnpaidBillAmount.toFixed(2)}
-              </Text>
-            </View>
-          </Pressable>
-        );
-      })}
+          return (
+            <Pressable
+              key={customer.id}
+              style={[styles.dueCard, isDesktop ? styles.dueCardDesktop : null]}
+              onPress={() => onOpenCustomer(customer.id)}
+            >
+              <View>
+                <Text style={styles.dueName}>{customer.name}</Text>
+                <Text style={styles.dueMobile}>{customer.mobile}</Text>
+              </View>
+              <View style={styles.dueRight}>
+                <Text style={[styles.dueAmount, { color: dueAmountColor }]}>₹{customer.totalDue.toFixed(2)}</Text>
+                <Text style={styles.dueMeta}>
+                  {customer.currentMonthStatus} • {statusDate}
+                </Text>
+                <Text style={[styles.unpaidMeta, customer.unpaidBillsCount > 3 ? styles.unpaidMetaAlert : null]}>
+                  Unpaid Bills: {customer.unpaidBillsCount} • Bills ₹{customer.totalUnpaidBillAmount.toFixed(2)}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
     </ScrollView>
   );
 };
@@ -100,12 +128,29 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.xl * 2
   },
+  contentDesktop: {
+    padding: spacing.xl,
+    paddingBottom: spacing.xl * 2
+  },
+  topRowDesktop: {
+    flexDirection: "row",
+    gap: spacing.lg,
+    alignItems: "flex-start"
+  },
   heroCard: {
     backgroundColor: colors.surfaceMuted,
     borderRadius: radius.xl,
     padding: spacing.xl,
     borderWidth: 1,
     borderColor: colors.border
+  },
+  heroCardDesktop: {
+    flex: 1,
+    minWidth: 260
+  },
+  metricsColDesktop: {
+    flex: 1,
+    gap: spacing.sm
   },
   heroLabel: {
     color: "#4E6783",
@@ -156,6 +201,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center"
   },
+  dueList: {
+    gap: spacing.sm
+  },
+  dueListDesktop: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md
+  },
   dueCard: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
@@ -165,6 +218,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between"
+  },
+  dueCardDesktop: {
+    flexBasis: "calc(50% - 8px)" as unknown as number,
+    flexGrow: 1,
+    flexShrink: 0,
+    minWidth: 280
   },
   dueName: {
     color: colors.textPrimary,

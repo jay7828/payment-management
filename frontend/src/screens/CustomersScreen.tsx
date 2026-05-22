@@ -16,6 +16,7 @@ import { CustomerCard } from "../components/CustomerCard";
 import { colors, fontFamily, radius, spacing } from "../theme";
 import { CustomerCardData } from "../types";
 import { CustomerDetailModal } from "./CustomerDetailModal";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 
 interface CustomersScreenProps {
   refreshKey: number;
@@ -47,6 +48,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customers, setCustomers] = useState<CustomerCardData[]>([]);
+  const { isDesktop } = useBreakpoint();
 
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -229,7 +231,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
           </View>
         ) : null}
 
-        <View style={styles.list}>
+        <View style={[styles.list, isDesktop ? styles.listDesktop : null]}>
           {filteredCustomers.map((customer) => (
             <CustomerCard key={customer.id} customer={customer} onPress={() => setSelectedCustomerId(customer.id)} />
           ))}
@@ -238,7 +240,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
 
       <Modal visible={addModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, isDesktop ? styles.modalCardDesktop : null]}>
             <Text style={styles.modalTitle}>Add Customer</Text>
             <TextInput
               value={name}
@@ -387,6 +389,11 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm
   },
+  listDesktop: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(24,50,74,0.35)",
@@ -400,6 +407,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border
+  },
+  modalCardDesktop: {
+    maxWidth: 480,
+    width: "100%",
+    alignSelf: "center"
   },
   modalTitle: {
     color: colors.textPrimary,

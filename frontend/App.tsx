@@ -9,6 +9,7 @@ import { LoginScreen } from "./src/screens/LoginScreen";
 import { CustomersScreen } from "./src/screens/CustomersScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { colors, fontFamily, radius, spacing } from "./src/theme";
+import { useBreakpoint } from "./src/hooks/useBreakpoint";
 
 type TabKey = "home" | "customers" | "settings";
 
@@ -30,6 +31,7 @@ const AuthenticatedApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>("home");
   const [refreshKey, setRefreshKey] = useState(0);
   const [focusCustomerId, setFocusCustomerId] = useState<string | null>(null);
+  const { isDesktop } = useBreakpoint();
 
   const triggerRefresh = useCallback(() => {
     setRefreshKey((value) => value + 1);
@@ -54,7 +56,6 @@ const AuthenticatedApp: React.FC = () => {
         setActiveTab("home");
         return true;
       }
-
       return true;
     });
 
@@ -63,6 +64,69 @@ const AuthenticatedApp: React.FC = () => {
     };
   }, [activeTab]);
 
+  if (isDesktop) {
+    return (
+      <View style={desktopStyles.root}>
+        <StatusBar style="dark" />
+        {/* Sidebar */}
+        <View style={desktopStyles.sidebar}>
+          <View style={desktopStyles.sidebarBrand}>
+            <Text style={desktopStyles.brandEyebrow}>Admin Console</Text>
+            <Text style={desktopStyles.brandTitle}>Payment Command Center</Text>
+          </View>
+
+          <View style={desktopStyles.sidebarNav}>
+            {TAB_ITEMS.map((tab) => {
+              const active = activeTab === tab.key;
+              return (
+                <Pressable
+                  key={tab.key}
+                  style={[desktopStyles.navItem, active ? desktopStyles.navItemActive : null]}
+                  onPress={() => setActiveTab(tab.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={tab.label}
+                >
+                  <Ionicons
+                    name={active ? tab.activeIcon : tab.icon}
+                    size={20}
+                    color={active ? colors.accentStrong : colors.textMuted}
+                  />
+                  <Text style={[desktopStyles.navLabel, active ? desktopStyles.navLabelActive : null]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={desktopStyles.sidebarFooter}>
+            <View style={desktopStyles.adminPill}>
+              <Ionicons name="person-circle-outline" size={16} color={colors.textMuted} />
+              <Text style={desktopStyles.adminText}>{admin?.username || "admin"}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Main content */}
+        <View style={desktopStyles.main}>
+          <View style={desktopStyles.contentInner}>
+            {activeTab === "home" ? <HomeScreen refreshKey={refreshKey} onOpenCustomer={openCustomerDetails} /> : null}
+            {activeTab === "customers" ? (
+              <CustomersScreen
+                refreshKey={refreshKey}
+                onDataChange={triggerRefresh}
+                focusCustomerId={focusCustomerId}
+                onFocusHandled={handleFocusHandled}
+              />
+            ) : null}
+            {activeTab === "settings" ? <SettingsScreen refreshKey={refreshKey} onLogout={logout} /> : null}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Mobile layout (original)
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <StatusBar style="dark" />
@@ -152,6 +216,107 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+// ─── Desktop styles ────────────────────────────────────────────────────────────
+
+const desktopStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: colors.background
+  },
+  sidebar: {
+    width: 240,
+    backgroundColor: colors.card,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    justifyContent: "space-between"
+  },
+  sidebarBrand: {
+    marginBottom: spacing.xl,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
+  },
+  brandEyebrow: {
+    color: colors.textMuted,
+    fontFamily: fontFamily.medium,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 1
+  },
+  brandTitle: {
+    marginTop: 6,
+    color: colors.textPrimary,
+    fontFamily: fontFamily.bold,
+    fontSize: 16,
+    lineHeight: 22
+  },
+  sidebarNav: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  navItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "transparent"
+  },
+  navItemActive: {
+    backgroundColor: "#EAF2FF",
+    borderColor: "#B8D4F8"
+  },
+  navLabel: {
+    color: colors.textMuted,
+    fontFamily: fontFamily.medium,
+    fontSize: 14
+  },
+  navLabelActive: {
+    color: colors.accentStrong,
+    fontFamily: fontFamily.bold
+  },
+  sidebarFooter: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border
+  },
+  adminPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: 999
+  },
+  adminText: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.medium,
+    fontSize: 13
+  },
+  main: {
+    flex: 1,
+    backgroundColor: colors.background,
+    overflow: "hidden"
+  },
+  contentInner: {
+    flex: 1,
+    maxWidth: 1100,
+    width: "100%",
+    alignSelf: "center"
+  }
+});
+
+// ─── Mobile styles ─────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
