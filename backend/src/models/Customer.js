@@ -38,6 +38,11 @@ const customerSchema = new mongoose.Schema(
       default: 0,
       min: 0
     },
+    siteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Site",
+      index: true
+    },
     isActive: {
       type: Boolean,
       default: true

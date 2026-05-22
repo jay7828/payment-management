@@ -5,6 +5,9 @@ const morgan = require("morgan");
 const authRoutes = require("./routes/authRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const reportRoutes = require("./routes/reportRoutes");
+const siteRoutes = require("./routes/siteRoutes");
+const employeeRoutes = require("./routes/employeeRoutes");
+const attendanceRoutes = require("./routes/attendanceRoutes");
 const auth = require("./middleware/auth");
 
 const app = express();
@@ -22,6 +25,9 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/customers", auth, customerRoutes);
+app.use("/api/sites", auth, siteRoutes);
+app.use("/api/employees", auth, employeeRoutes);
+app.use("/api/attendance", auth, attendanceRoutes);
 app.use("/api/reports", auth, reportRoutes);
 
 app.use((req, res) => {

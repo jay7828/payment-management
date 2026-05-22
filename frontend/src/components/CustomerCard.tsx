@@ -38,6 +38,8 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({ customer, onPress })
         </View>
       </View>
 
+      {customer.siteName ? <Text style={styles.siteName}>Site: {customer.siteName}</Text> : null}
+
       <Text style={styles.address} numberOfLines={2}>
         {customer.address || "No address added"}
       </Text>
@@ -116,6 +118,11 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.medium,
     fontSize: 11,
     textAlign: "center"
+  },
+  siteName: {
+    color: colors.accentStrong,
+    fontFamily: fontFamily.medium,
+    fontSize: 12
   },
   address: {
     color: colors.textMuted,

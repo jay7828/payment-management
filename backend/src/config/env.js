@@ -18,5 +18,6 @@ module.exports = {
   JWT_SECRET: process.env.JWT_SECRET,
   ADMIN_USERNAME: process.env.ADMIN_USERNAME,
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
-  ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH
+  ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH,
+  REPORT_EMAIL_TO: process.env.REPORT_EMAIL_TO || "js758089@gmail.com"
 };

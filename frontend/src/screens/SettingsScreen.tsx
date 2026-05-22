@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { api, getApiError } from "../api/client";
 import { colors, fontFamily, radius, spacing } from "../theme";
-import { MonthlyCollectionRow } from "../types";
+import { MonthlyCollectionRow, SalesReport, Site } from "../types";
 import {
   DEFAULT_WHATSAPP_MESSAGE_TEMPLATE,
   WHATSAPP_TEMPLATE_PLACEHOLDERS,
@@ -31,7 +31,17 @@ interface MonthlyCollectionResponse {
   collection: MonthlyCollectionRow[];
 }
 
-type SettingsPage = "home" | "reports" | "whatsapp";
+type SettingsPage = "home" | "reports" | "salesReport" | "sites" | "whatsapp";
+
+interface SitesResponse {
+  sites: Site[];
+}
+
+interface SalesReportResponse {
+  report: SalesReport;
+  emailConfigured: boolean;
+  defaultRecipient: string;
+}
 
 const formatCurrency = (value: number) => `₹${value.toFixed(2)}`;
 
@@ -47,6 +57,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLo
   const [templateLoading, setTemplateLoading] = useState(true);
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateStatus, setTemplateStatus] = useState<string | null>(null);
+
+  const [sites, setSites] = useState<Site[]>([]);
+  const [sitesLoading, setSitesLoading] = useState(false);
+  const [newSiteName, setNewSiteName] = useState("");
+  const [savingSite, setSavingSite] = useState(false);
+
+  const [salesMonthKey, setSalesMonthKey] = useState(dayjs().format("YYYY-MM"));
+  const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [salesError, setSalesError] = useState<string | null>(null);
+  const [reportEmail, setReportEmail] = useState("js758089@gmail.com");
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [sendingReport, setSendingReport] = useState(false);
+  const [sendStatus, setSendStatus] = useState<string | null>(null);
 
   const loadCollections = async () => {
     try {
@@ -163,14 +187,96 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLo
       ? (monthChange / previousMonth.totalCollection) * 100
       : null;
 
+  const loadSites = async () => {
+    try {
+      setSitesLoading(true);
+      const response = await api.get<SitesResponse>("/sites");
+      setSites(response.data.sites || []);
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setSitesLoading(false);
+    }
+  };
+
+  const loadSalesReport = async (monthKeyOverride?: string) => {
+    const monthKey = monthKeyOverride || salesMonthKey;
+    try {
+      setSalesLoading(true);
+      setSalesError(null);
+      const response = await api.get<SalesReportResponse>("/reports/sales-report", {
+        params: { monthKey }
+      });
+      setSalesReport(response.data.report);
+      setEmailConfigured(response.data.emailConfigured);
+      setReportEmail(response.data.defaultRecipient || "js758089@gmail.com");
+    } catch (requestError) {
+      setSalesError(getApiError(requestError));
+      setSalesReport(null);
+    } finally {
+      setSalesLoading(false);
+    }
+  };
+
+  const handleAddSite = async () => {
+    if (!newSiteName.trim()) {
+      setError("Site name is required");
+      return;
+    }
+    try {
+      setSavingSite(true);
+      setError(null);
+      await api.post("/sites", { name: newSiteName.trim() });
+      setNewSiteName("");
+      await loadSites();
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setSavingSite(false);
+    }
+  };
+
+  const handleSendSalesReport = async () => {
+    try {
+      setSendingReport(true);
+      setSendStatus(null);
+      setSalesError(null);
+      const response = await api.post("/reports/sales-report/send", {
+        monthKey: salesMonthKey,
+        email: reportEmail.trim()
+      });
+      setSendStatus(response.data.message || "Report sent successfully.");
+    } catch (requestError) {
+      setSalesError(getApiError(requestError));
+    } finally {
+      setSendingReport(false);
+    }
+  };
+
   const handleOpenReportsPage = () => {
     setActivePage("reports");
     void loadCollections();
   };
 
+  const handleOpenSalesReportPage = () => {
+    setActivePage("salesReport");
+    void loadSalesReport();
+  };
+
+  const handleOpenSitesPage = () => {
+    setActivePage("sites");
+    void loadSites();
+  };
+
   const handleOpenWhatsAppPage = () => {
     setActivePage("whatsapp");
   };
+
+  const salesMonthOptions = useMemo(() => {
+    return Array.from({ length: 24 }, (_, index) =>
+      dayjs().subtract(index, "month").format("YYYY-MM")
+    );
+  }, []);
 
   const handleBackToHome = () => {
     setActivePage("home");
@@ -227,6 +333,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLo
             <View style={styles.navCardBody}>
               <Text style={styles.navCardTitle}>Reports</Text>
               <Text style={styles.navCardSubtitle}>Monthly collection insights and trends.</Text>
+            </View>
+            <Text style={styles.navCardArrow}>›</Text>
+          </Pressable>
+
+          <Pressable style={styles.navCard} onPress={handleOpenSalesReportPage}>
+            <View style={styles.navCardBody}>
+              <Text style={styles.navCardTitle}>Sales Report Email</Text>
+              <Text style={styles.navCardSubtitle}>Generate and email monthly sales reports.</Text>
+            </View>
+            <Text style={styles.navCardArrow}>›</Text>
+          </Pressable>
+
+          <Pressable style={styles.navCard} onPress={handleOpenSitesPage}>
+            <View style={styles.navCardBody}>
+              <Text style={styles.navCardTitle}>Sites</Text>
+              <Text style={styles.navCardSubtitle}>Manage customer sites and default location.</Text>
             </View>
             <Text style={styles.navCardArrow}>›</Text>
           </Pressable>
@@ -340,6 +462,140 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ refreshKey, onLo
                 );
               })}
             </View>
+          </View>
+        </>
+      ) : null}
+
+      {activePage === "sites" ? (
+        <>
+          <View style={styles.pageHeaderCard}>
+            <Pressable style={styles.backButton} onPress={handleBackToHome}>
+              <Text style={styles.backButtonText}>Back</Text>
+            </Pressable>
+            <Text style={styles.pageTitle}>Sites</Text>
+            <Text style={styles.pageSubtitle}>Create sites and assign customers when adding new entries.</Text>
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.filterRow}>
+              <TextInput
+                value={newSiteName}
+                onChangeText={setNewSiteName}
+                placeholder="New site name"
+                placeholderTextColor="#8094AF"
+                style={styles.input}
+              />
+              <Pressable
+                style={[styles.refreshButton, savingSite ? styles.buttonDisabled : null]}
+                onPress={() => void handleAddSite()}
+                disabled={savingSite}
+              >
+                <Text style={styles.refreshButtonText}>{savingSite ? "..." : "Add"}</Text>
+              </Pressable>
+            </View>
+
+            {sitesLoading ? <ActivityIndicator color={colors.accentStrong} style={{ marginTop: spacing.md }} /> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+
+            <View style={styles.list}>
+              {sites.map((site) => (
+                <View key={site.id} style={styles.row}>
+                  <View>
+                    <Text style={styles.month}>{site.name}</Text>
+                    <Text style={styles.transactions}>{site.isDefault ? "Default site" : "Custom site"}</Text>
+                  </View>
+                  {site.isDefault ? <Text style={styles.defaultBadge}>Default</Text> : null}
+                </View>
+              ))}
+            </View>
+          </View>
+        </>
+      ) : null}
+
+      {activePage === "salesReport" ? (
+        <>
+          <View style={styles.pageHeaderCard}>
+            <Pressable style={styles.backButton} onPress={handleBackToHome}>
+              <Text style={styles.backButtonText}>Back</Text>
+            </Pressable>
+            <Text style={styles.pageTitle}>Monthly Sales Report</Text>
+            <Text style={styles.pageSubtitle}>
+              Preview monthly sales data and send the report by email.
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Select Month</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.monthPickerRow}>
+              {salesMonthOptions.map((monthKey) => {
+                const active = salesMonthKey === monthKey;
+                return (
+                  <Pressable
+                    key={monthKey}
+                    style={[styles.monthPickerChip, active ? styles.monthPickerChipActive : null]}
+                    onPress={() => {
+                      setSalesMonthKey(monthKey);
+                      void loadSalesReport(monthKey);
+                    }}
+                  >
+                    <Text style={[styles.monthPickerText, active ? styles.monthPickerTextActive : null]}>
+                      {dayjs(`${monthKey}-01`).format("MMM YY")}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <Pressable style={styles.refreshButton} onPress={() => void loadSalesReport()}>
+              <Text style={styles.refreshButtonText}>{salesLoading ? "Loading..." : "Load Report"}</Text>
+            </Pressable>
+
+            {salesError ? <Text style={styles.error}>{salesError}</Text> : null}
+            {sendStatus ? <Text style={styles.templateStatus}>{sendStatus}</Text> : null}
+
+            {salesReport ? (
+              <View style={styles.detailCard}>
+                <Text style={styles.detailTitle}>{salesReport.monthLabel}</Text>
+                <Text style={styles.detailLine}>Collection: {formatCurrency(salesReport.sales.totalCollection)}</Text>
+                <Text style={styles.detailLine}>Transactions: {salesReport.sales.transactionCount}</Text>
+                <Text style={styles.detailLine}>Bills created: {salesReport.billing.billsCreated}</Text>
+                <Text style={styles.detailLine}>Total billed: {formatCurrency(salesReport.billing.totalBilled)}</Text>
+                <Text style={styles.detailLine}>Bill due: {formatCurrency(salesReport.billing.totalBillDue)}</Text>
+                <Text style={styles.detailLine}>New customers: {salesReport.customers.newCustomers}</Text>
+                <Text style={styles.detailLine}>
+                  Outstanding due: {formatCurrency(salesReport.customers.totalOutstandingDue)}
+                </Text>
+                <Text style={styles.detailLine}>
+                  Attendance marked: {salesReport.attendance.recordsMarked} (P {salesReport.attendance.present} / A{" "}
+                  {salesReport.attendance.absent})
+                </Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.sectionLabel}>Send Report</Text>
+            <TextInput
+              value={reportEmail}
+              onChangeText={setReportEmail}
+              placeholder="Recipient email"
+              placeholderTextColor="#8094AF"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={styles.input}
+            />
+            {!emailConfigured ? (
+              <Text style={styles.warningHint}>
+                Email is not configured on server. Add SMTP_HOST, SMTP_USER, and SMTP_PASS in backend .env.
+              </Text>
+            ) : null}
+            <Pressable
+              style={[styles.primaryButton, sendingReport || !emailConfigured ? styles.buttonDisabled : null]}
+              onPress={() => void handleSendSalesReport()}
+              disabled={sendingReport || !emailConfigured}
+            >
+              <Text style={styles.primaryButtonText}>
+                {sendingReport ? "Sending..." : `Send ${dayjs(`${salesMonthKey}-01`).format("MMM YYYY")} Report`}
+              </Text>
+            </Pressable>
           </View>
         </>
       ) : null}
@@ -791,5 +1047,41 @@ const styles = StyleSheet.create({
     color: colors.textOnDark,
     fontFamily: fontFamily.bold,
     fontSize: 16
+  },
+  monthPickerRow: {
+    gap: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  monthPickerChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8
+  },
+  monthPickerChipActive: {
+    backgroundColor: colors.accentStrong,
+    borderColor: colors.accentStrong
+  },
+  monthPickerText: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.medium,
+    fontSize: 12
+  },
+  monthPickerTextActive: {
+    color: colors.textOnDark,
+    fontFamily: fontFamily.bold
+  },
+  defaultBadge: {
+    color: colors.accentStrong,
+    fontFamily: fontFamily.bold,
+    fontSize: 12
+  },
+  warningHint: {
+    color: colors.warning,
+    fontFamily: fontFamily.medium,
+    fontSize: 12,
+    lineHeight: 17
   }
 });

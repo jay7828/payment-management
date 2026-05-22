@@ -14,7 +14,7 @@ import {
 import { api, getApiError } from "../api/client";
 import { CustomerCard } from "../components/CustomerCard";
 import { colors, fontFamily, radius, spacing } from "../theme";
-import { CustomerCardData } from "../types";
+import { CustomerCardData, Site } from "../types";
 import { CustomerDetailModal } from "./CustomerDetailModal";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 
@@ -27,6 +27,10 @@ interface CustomersScreenProps {
 
 interface CustomersResponse {
   customers: CustomerCardData[];
+}
+
+interface SitesResponse {
+  sites: Site[];
 }
 
 type CustomerFilter = "ALL" | "UNPAID_OVER_3" | "FULLY_PAID";
@@ -58,6 +62,9 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
   const [address, setAddress] = useState("");
   const [otherInfo, setOtherInfo] = useState("");
   const [openingBalance, setOpeningBalance] = useState("");
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [filterSiteId, setFilterSiteId] = useState<string | null>(null);
+  const [sites, setSites] = useState<Site[]>([]);
   const [savingCustomer, setSavingCustomer] = useState(false);
 
   const loadCustomers = useCallback(async () => {
@@ -65,8 +72,12 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
       setLoading(true);
       setError(null);
 
+      const params: Record<string, string> = {};
+      if (search.trim()) params.search = search.trim();
+      if (filterSiteId) params.siteId = filterSiteId;
+
       const response = await api.get<CustomersResponse>("/customers", {
-        params: search.trim() ? { search: search.trim() } : undefined
+        params: Object.keys(params).length ? params : undefined
       });
 
       setCustomers(response.data.customers || []);
@@ -75,7 +86,23 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, filterSiteId]);
+
+  const loadSites = useCallback(async () => {
+    try {
+      const response = await api.get<SitesResponse>("/sites");
+      const nextSites = response.data.sites || [];
+      setSites(nextSites);
+      const defaultSite = nextSites.find((site) => site.isDefault) || nextSites[0];
+      setSelectedSiteId((current) => current || defaultSite?.id || null);
+    } catch {
+      setSites([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSites();
+  }, [loadSites, refreshKey]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -122,6 +149,8 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
     setAddress("");
     setOtherInfo("");
     setOpeningBalance("");
+    const defaultSite = sites.find((site) => site.isDefault) || sites[0];
+    setSelectedSiteId(defaultSite?.id || null);
   };
 
   const handleAddCustomer = async () => {
@@ -142,7 +171,8 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
         mobile: mobile.trim(),
         address: address.trim(),
         otherInfo: otherInfo.trim(),
-        previousBalance
+        previousBalance,
+        siteId: selectedSiteId || undefined
       });
 
       resetAddForm();
@@ -204,6 +234,29 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
             <Text style={styles.addButtonText}>+ Add</Text>
           </Pressable>
         </View>
+
+        {sites.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.siteFilterRow}>
+            <Pressable
+              style={[styles.siteChip, !filterSiteId ? styles.siteChipActive : null]}
+              onPress={() => setFilterSiteId(null)}
+            >
+              <Text style={[styles.siteChipText, !filterSiteId ? styles.siteChipTextActive : null]}>All Sites</Text>
+            </Pressable>
+            {sites.map((site) => {
+              const active = filterSiteId === site.id;
+              return (
+                <Pressable
+                  key={site.id}
+                  style={[styles.siteChip, active ? styles.siteChipActive : null]}
+                  onPress={() => setFilterSiteId(site.id)}
+                >
+                  <Text style={[styles.siteChipText, active ? styles.siteChipTextActive : null]}>{site.name}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
         <View style={styles.filterRow}>
           {FILTER_OPTIONS.map((option) => {
@@ -280,6 +333,26 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
               style={styles.input}
             />
 
+            {sites.length ? (
+              <>
+                <Text style={styles.fieldLabel}>Site</Text>
+                <View style={styles.sitePickerRow}>
+                  {sites.map((site) => {
+                    const active = selectedSiteId === site.id;
+                    return (
+                      <Pressable
+                        key={site.id}
+                        style={[styles.siteChip, active ? styles.siteChipActive : null]}
+                        onPress={() => setSelectedSiteId(site.id)}
+                      >
+                        <Text style={[styles.siteChipText, active ? styles.siteChipTextActive : null]}>{site.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
+
             <View style={styles.modalActions}>
               <Pressable style={styles.secondaryButton} onPress={() => setAddModalVisible(false)}>
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
@@ -315,6 +388,41 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: "row",
     gap: spacing.sm
+  },
+  siteFilterRow: {
+    gap: spacing.sm
+  },
+  sitePickerRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
+  },
+  siteChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8
+  },
+  siteChipActive: {
+    backgroundColor: colors.accentStrong,
+    borderColor: colors.accentStrong
+  },
+  siteChipText: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.medium,
+    fontSize: 12
+  },
+  siteChipTextActive: {
+    color: colors.textOnDark,
+    fontFamily: fontFamily.bold
+  },
+  fieldLabel: {
+    color: colors.textMuted,
+    fontFamily: fontFamily.medium,
+    fontSize: 12,
+    marginTop: spacing.xs
   },
   filterRow: {
     flexDirection: "row",

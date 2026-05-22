@@ -1,8 +1,10 @@
 const Customer = require("../models/Customer");
 const Bill = require("../models/Bill");
 const Payment = require("../models/Payment");
+const Site = require("../models/Site");
 const { getCurrentMonthKey } = require("../utils/month");
 const { calculateBillDue, calculateCustomerTotalDue } = require("../utils/due");
+const { getDefaultSiteId } = require("../utils/defaultSite");
 
 const roundCurrency = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
@@ -91,10 +93,12 @@ const deriveCardStatus = (bills, currentMonthKey, totalDue, fallbackDate) => {
   };
 };
 
-const serializeCustomerCard = (customer, bills, currentMonthKey) => {
+const serializeCustomerCard = (customer, bills, currentMonthKey, siteMap) => {
   const totalDue = roundCurrency(calculateCustomerTotalDue(customer, bills));
   const status = deriveCardStatus(bills, currentMonthKey, totalDue, customer.updatedAt || customer.createdAt);
   const unpaidStats = getUnpaidBillStats(bills);
+  const siteId = customer.siteId ? customer.siteId.toString() : null;
+  const site = siteId && siteMap ? siteMap.get(siteId) : null;
 
   return {
     id: customer._id.toString(),
@@ -102,6 +106,8 @@ const serializeCustomerCard = (customer, bills, currentMonthKey) => {
     mobile: customer.mobile || "",
     address: customer.address || "",
     otherInfo: customer.otherInfo || "",
+    siteId,
+    siteName: site ? site.name : "",
     isActive: Boolean(customer.isActive),
     previousBalance: roundCurrency(customer.openingBalance),
     openingBalance: roundCurrency(customer.openingBalance),
@@ -121,8 +127,13 @@ const isDuplicateMobileError = (error) => Boolean(error && error.code === 11000 
 const listCustomers = async (req, res, next) => {
   try {
     const search = String(req.query.search || "").trim();
+    const siteId = String(req.query.siteId || "").trim();
     const includeInactive = String(req.query.includeInactive || "false") === "true";
     const filter = includeInactive ? {} : { isActive: true };
+
+    if (siteId) {
+      filter.siteId = siteId;
+    }
 
     if (search) {
       const regex = new RegExp(search, "i");
@@ -150,10 +161,14 @@ const listCustomers = async (req, res, next) => {
       billsByCustomer.get(key).push(bill);
     }
 
+    const siteIds = [...new Set(customers.map((c) => c.siteId).filter(Boolean))];
+    const sites = siteIds.length ? await Site.find({ _id: { $in: siteIds } }).lean() : [];
+    const siteMap = new Map(sites.map((site) => [site._id.toString(), site]));
+
     const currentMonthKey = getCurrentMonthKey();
     const customerCards = customers.map((customer) => {
       const customerBills = billsByCustomer.get(customer._id.toString()) || [];
-      return serializeCustomerCard(customer, customerBills, currentMonthKey);
+      return serializeCustomerCard(customer, customerBills, currentMonthKey, siteMap);
     });
 
     return res.json({ customers: customerCards });
@@ -171,6 +186,16 @@ const createCustomer = async (req, res, next) => {
       return res.status(400).json({ message: "name is required" });
     }
 
+    let siteId = req.body.siteId ? String(req.body.siteId) : null;
+    if (siteId) {
+      const site = await Site.findById(siteId).lean();
+      if (!site || !site.isActive) {
+        return res.status(400).json({ message: "Invalid or inactive site selected" });
+      }
+    } else {
+      siteId = await getDefaultSiteId();
+    }
+
     const customerPayload = {
       name,
       address: String(req.body.address || "").trim(),
@@ -178,7 +203,8 @@ const createCustomer = async (req, res, next) => {
       openingBalance: parseNonNegativeNumber(
         req.body.openingBalance !== undefined ? req.body.openingBalance : req.body.previousBalance,
         0
-      )
+      ),
+      siteId
     };
 
     if (mobile) {
@@ -186,6 +212,7 @@ const createCustomer = async (req, res, next) => {
     }
 
     const customer = await Customer.create(customerPayload);
+    const site = await Site.findById(siteId).lean();
 
     return res.status(201).json({
       customer: {
@@ -194,6 +221,8 @@ const createCustomer = async (req, res, next) => {
         mobile: customer.mobile || "",
         address: customer.address,
         otherInfo: customer.otherInfo,
+        siteId: siteId.toString(),
+        siteName: site ? site.name : "",
         openingBalance: roundCurrency(customer.openingBalance),
         previousBalance: roundCurrency(customer.openingBalance),
         creditBalance: roundCurrency(customer.creditBalance),
@@ -226,6 +255,7 @@ const getCustomerDetails = async (req, res, next) => {
 
     const totalDue = roundCurrency(calculateCustomerTotalDue(customer, bills));
     const unpaidStats = getUnpaidBillStats(bills);
+    const site = customer.siteId ? await Site.findById(customer.siteId).lean() : null;
 
     return res.json({
       customer: {
@@ -234,6 +264,8 @@ const getCustomerDetails = async (req, res, next) => {
         mobile: customer.mobile || "",
         address: customer.address || "",
         otherInfo: customer.otherInfo || "",
+        siteId: customer.siteId ? customer.siteId.toString() : null,
+        siteName: site ? site.name : "",
         isActive: Boolean(customer.isActive),
         openingBalance: roundCurrency(customer.openingBalance),
         previousBalance: roundCurrency(customer.openingBalance),
@@ -281,6 +313,17 @@ const updateCustomer = async (req, res, next) => {
     if (Object.prototype.hasOwnProperty.call(req.body, "isActive")) {
       setUpdates.isActive = Boolean(req.body.isActive);
     }
+    if (Object.prototype.hasOwnProperty.call(req.body, "siteId")) {
+      const siteId = String(req.body.siteId || "");
+      if (!siteId) {
+        return res.status(400).json({ message: "siteId cannot be empty" });
+      }
+      const site = await Site.findById(siteId).lean();
+      if (!site || !site.isActive) {
+        return res.status(400).json({ message: "Invalid or inactive site selected" });
+      }
+      setUpdates.siteId = siteId;
+    }
 
     const updateQuery = {};
     if (Object.keys(setUpdates).length) {
@@ -305,6 +348,7 @@ const updateCustomer = async (req, res, next) => {
 
     const bills = await Bill.find({ customerId }).lean();
     const unpaidStats = getUnpaidBillStats(bills);
+    const site = customer.siteId ? await Site.findById(customer.siteId).lean() : null;
 
     return res.json({
       customer: {
@@ -313,6 +357,8 @@ const updateCustomer = async (req, res, next) => {
         mobile: customer.mobile || "",
         address: customer.address || "",
         otherInfo: customer.otherInfo || "",
+        siteId: customer.siteId ? customer.siteId.toString() : null,
+        siteName: site ? site.name : "",
         isActive: Boolean(customer.isActive),
         openingBalance: roundCurrency(customer.openingBalance),
         previousBalance: roundCurrency(customer.openingBalance),

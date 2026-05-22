@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { MONGODB_URI } = require("./env");
+const { ensureDefaultSite } = require("../utils/defaultSite");
 
 const MOBILE_INDEX_NAME = "mobile_1";
 const MOBILE_INDEX_SPEC = { mobile: 1 };
@@ -58,6 +59,7 @@ const connectDB = async () => {
   mongoose.set("strictQuery", true);
   await mongoose.connect(MONGODB_URI);
   await ensureCustomerMobileIndex();
+  await ensureDefaultSite();
   return mongoose.connection;
 };
 
